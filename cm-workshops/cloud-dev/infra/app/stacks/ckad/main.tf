@@ -1,3 +1,8 @@
+provider "kubernetes" {
+  config_path    = "~/.kube/config"
+  config_context = "ckad-dev-aks"
+}
+
 locals {
   resource_group_name = "${var.prefix}-resources"
   tags = {
@@ -39,7 +44,7 @@ module "aks" {
   source                          = "../../modules/aks"
   agents_size                     = var.agents_size
   agents_count                    = var.agents_count
-  resource_group_name             = local.resource_group_name
+  resource_group_name             = azurerm_resource_group.this.name
   prefix                          = var.prefix
   vnet_subnet_id                  = module.network.vnet_subnets[0]
   os_disk_size_gb                 = var.os_disk_size_gb
@@ -51,3 +56,58 @@ module "aks" {
 
   depends_on = [azurerm_resource_group.this]
 }
+
+# https://github.com/fbeltrao/aks-letsencrypt/blob/master/readme.md
+resource "azurerm_dns_zone" "default" {
+  name                = var.dns_zone_name
+  resource_group_name = azurerm_resource_group.this.name
+}
+
+resource "azurerm_dns_a_record" "dns-a-records" {
+  for_each = toset(var.dns_a_records)
+
+  name                = each.key
+  zone_name           = azurerm_dns_zone.default.name
+  resource_group_name = azurerm_resource_group.this.name
+  ttl                 = 300
+  records             = var.dns_a_records_ips
+}
+
+module "kv" {
+  source              = "../../modules/keyvault"
+  resource_group_name = azurerm_resource_group.this.name
+  prefix              = var.prefix
+  tags                = local.tags
+
+  depends_on = [azurerm_resource_group.this]
+}
+
+module "db" {
+  source                          = "../../modules/db"
+  resource_group_name             = azurerm_resource_group.this.name
+  prefix                          = var.prefix
+  tags                            = local.tags
+  keyvault_secrets_enabled = true
+  keyvault_id              = module.kv.id
+}
+
+resource "local_file" "kube_config" {
+    content     = module.aks.kube_config_raw
+    filename = "${path.module}/kubeconfig"
+
+    depends_on = [module.aks]
+}
+
+# module "argocd" {
+#   source                          = "../../modules/argocd"
+
+#   cluster_config_file = local_file.kube_config.filename
+#   cluster_type        = "kubernetes"
+#   app_namespace       = "argocd-app"
+#   ingress_subdomain   = "christopher-lenz.de"
+#   olm_namespace       = "argocd-olm"
+#   operator_namespace  = "argocd-operator"
+#   name                = "argocd"
+
+#   depends_on = [local_file.kube_config]
+# }

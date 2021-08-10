@@ -38,3 +38,21 @@ variable "enable_http_application_routing" {
   type        = bool
   default     = false
 }
+
+variable "dns_zone_name" {
+  default     = ""
+  description = "The name of the DNS Zone. Must be a valid domain name."
+  type        = string
+}
+
+variable "dns_a_records_ips" {
+  type        = list(string)
+  description = "An list of IPv4 Addresses"
+  default     = []
+}
+
+variable "dns_a_records" {
+  type        = list(string)
+  description = "An list of DNS Type A Records to set"
+  default     = []
+}
