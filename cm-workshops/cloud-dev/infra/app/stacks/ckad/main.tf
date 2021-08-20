@@ -83,19 +83,33 @@ module "kv" {
 }
 
 module "db" {
-  source                          = "../../modules/db"
-  resource_group_name             = azurerm_resource_group.this.name
-  prefix                          = var.prefix
-  tags                            = local.tags
+  source                   = "../../modules/db"
+  resource_group_name      = azurerm_resource_group.this.name
+  prefix                   = var.prefix
+  tags                     = local.tags
   keyvault_secrets_enabled = true
   keyvault_id              = module.kv.id
 }
 
-resource "local_file" "kube_config" {
-    content     = module.aks.kube_config_raw
-    filename = "${path.module}/kubeconfig"
+module "redis" {
+  source                    = "../../modules/redis"
+  resource_group_name       = azurerm_resource_group.this.name
+  prefix                    = var.prefix
+  tags                      = local.tags
+  cache_capacity            = 0
+  cache_family              = "C"
+  cache_sku_name            = "Basic"
+  cache_enable_non_ssl_port = false
+  cache_minimum_tls_version = "1.2"
+  keyvault_secrets_enabled  = true
+  keyvault_id               = module.kv.id
+}
 
-    depends_on = [module.aks]
+resource "local_file" "kube_config" {
+  content  = module.aks.kube_config_raw
+  filename = "${path.module}/kubeconfig"
+
+  depends_on = [module.aks]
 }
 
 # module "argocd" {
